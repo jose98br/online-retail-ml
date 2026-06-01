@@ -1,0 +1,21 @@
+# Data files (too large for GitHub)
+*.xlsx
+*.xls
+*.csv
+*.pkl
+*.pickle
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
