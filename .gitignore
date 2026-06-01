@@ -5,6 +5,10 @@
 *.pkl
 *.pickle
 
+# Project files (not needed in repo)
+*.pdf
+*.pptx
+
 # Python
 __pycache__/
 *.py[cod]
