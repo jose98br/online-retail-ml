@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Predicción de Recompra — Online Retail II</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --void:#080b12;
+  --deep:#0d1117;
+  --surface:#111827;
+  --card:#141c2e;
+  --card2:#1a2235;
+  --border:#1e2d45;
+  --border2:#243352;
+  --cyan:#00e5ff;
+  --cyan-dim:rgba(0,229,255,.15);
+  --cyan-glow:rgba(0,229,255,.08);
+  --amber:#ffb347;
+  --amber-dim:rgba(255,179,71,.15);
+  --green:#00ff9d;
+  --green-dim:rgba(0,255,157,.12);
+  --red:#ff4d6d;
+  --red-dim:rgba(255,77,109,.12);
+  --text:#e8edf5;
+  --text2:#8fa3bf;
+  --text3:#4d6480;
+  --serif:'DM Serif Display',Georgia,serif;
+  --mono:'DM Mono',monospace;
+  --sans:'DM Sans',system-ui,sans-serif;
+}
+
+html,body{width:100%;height:100%;overflow:hidden;background:var(--void);color:var(--text);font-family:var(--sans)}
+
+/* CANVAS BG */
+#starfield{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}
+
+/* SCAN LINE */
+body::after{
+  content:'';position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);
+}
+
+/* SLIDES */
+.deck{position:relative;z-index:2;width:100vw;height:100vh}
+.slide{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  opacity:0;pointer-events:none;transition:opacity .5s cubic-bezier(.4,0,.2,1),transform .5s cubic-bezier(.4,0,.2,1);
+  transform:translateX(40px);
+}
+.slide.active{opacity:1;pointer-events:all;transform:translateX(0)}
+.slide.exit{opacity:0;transform:translateX(-40px)}
+
+.slide-inner{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  padding:40px 60px 80px;
+  scrollbar-width:thin;scrollbar-color:var(--border2) transparent;
+}
+.slide-inner::-webkit-scrollbar{width:4px}
+.slide-inner::-webkit-scrollbar-track{background:transparent}
+.slide-inner::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* NAV BAR */
+.nav-bar{
+  position:fixed;bottom:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 32px 16px;
+  background:linear-gradient(to top,rgba(8,11,18,.95) 60%,transparent);
+}
+.nav-dots{display:flex;gap:8px;align-items:center}
+.nav-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--border2);cursor:pointer;
+  transition:all .3s;border:1px solid transparent;
+}
+.nav-dot.active{background:var(--cyan);box-shadow:0 0 8px var(--cyan);width:18px;border-radius:3px}
+.nav-btn{
+  background:none;border:1px solid var(--border2);color:var(--text2);
+  padding:6px 16px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:12px;
+  transition:all .2s;letter-spacing:.05em;
+}
+.nav-btn:hover{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-glow)}
+.slide-counter{font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:.1em}
+
+/* SLIDE LABEL */
+.slide-label{
+  font-family:var(--mono);font-size:13px;color:var(--cyan);letter-spacing:.15em;
+  text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;
+}
+.slide-label::before{content:'';width:24px;height:1px;background:var(--cyan);opacity:.6}
+
+/* TYPOGRAPHY */
+h1{font-family:var(--serif);font-size:clamp(36px,5vw,58px);line-height:1.05;font-weight:400;letter-spacing:-.02em}
+h2{font-family:var(--serif);font-size:clamp(28px,3.5vw,42px);line-height:1.1;font-weight:400;letter-spacing:-.02em;margin-bottom:28px}
+h3{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--text2);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
+
+/* CARDS */
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px;
+  transition:border-color .2s;
+}
+.card:hover{border-color:var(--border2)}
+.card.cyan{border-color:rgba(0,229,255,.25);background:linear-gradient(135deg,var(--card),rgba(0,229,255,.04))}
+.card.amber{border-color:rgba(255,179,71,.25);background:linear-gradient(135deg,var(--card),rgba(255,179,71,.04))}
+.card.green{border-color:rgba(0,255,157,.25);background:linear-gradient(135deg,var(--card),rgba(0,255,157,.04))}
+
+/* STAT */
+.stat-num{font-family:var(--mono);font-size:clamp(28px,3vw,38px);font-weight:500;line-height:1;margin-bottom:6px}
+.stat-lbl{font-size:12px;color:var(--text3);letter-spacing:.08em;text-transform:uppercase}
+
+/* GRID */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+
+/* TAG PILL */
+.pill{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--card2);border:1px solid var(--border2);
+  border-radius:20px;padding:6px 14px;font-size:13px;color:var(--text2);
+  font-family:var(--mono);
+}
+.pill strong{color:var(--text);font-weight:500}
+
+/* CHART WRAP */
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px}
+.chart-box h3{margin-bottom:10px}
+
+/* EXCLUSION TABLE */
+.exc-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-radius:8px;border:1px solid var(--border);
+  background:var(--card);margin-bottom:8px;
+  font-size:14px;
+}
+.exc-row .name{color:var(--text2)}
+.exc-row .val{font-family:var(--mono);font-size:13px;color:var(--red)}
+.exc-row.total{border-color:rgba(0,255,157,.3);background:var(--green-dim)}
+.exc-row.total .val{color:var(--green)}
+
+/* RFM CARDS */
+.rfm-card{
+  border-radius:12px;padding:24px;position:relative;overflow:hidden;
+}
+.rfm-card .big-letter{
+  font-family:var(--serif);font-size:80px;font-weight:400;line-height:1;
+  position:absolute;right:16px;bottom:-8px;opacity:.12;
+}
+.rfm-card h4{font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.rfm-card p{font-size:14px;color:var(--text2);line-height:1.5}
+.rfm-r{background:linear-gradient(135deg,rgba(0,229,255,.08),rgba(0,229,255,.03));border:1px solid rgba(0,229,255,.2)}
+.rfm-r .big-letter,.rfm-r h4{color:var(--cyan)}
+.rfm-f{background:linear-gradient(135deg,rgba(255,179,71,.08),rgba(255,179,71,.03));border:1px solid rgba(255,179,71,.2)}
+.rfm-f .big-letter,.rfm-f h4{color:var(--amber)}
+.rfm-m{background:linear-gradient(135deg,rgba(0,255,157,.08),rgba(0,255,157,.03));border:1px solid rgba(0,255,157,.2)}
+.rfm-m .big-letter,.rfm-m h4{color:var(--green)}
+
+/* TIMELINE */
+.timeline{display:flex;align-items:stretch;gap:0;margin-top:20px;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.tl-train{flex:2;background:linear-gradient(135deg,rgba(0,229,255,.08),var(--card));padding:18px 20px}
+.tl-arrow{width:40px;background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:18px}
+.tl-test{flex:1;background:linear-gradient(135deg,rgba(0,255,157,.08),var(--card));padding:18px 20px}
+.tl-label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+.tl-val{font-size:22px;font-family:var(--mono);font-weight:500}
+.tl-sub{font-size:12px;color:var(--text3);margin-top:4px}
+
+/* MODEL BARS */
+.model-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.model-bar-name{font-size:13px;color:var(--text2);width:160px;flex-shrink:0;font-family:var(--mono)}
+.model-bar-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.model-bar-fill{height:100%;border-radius:4px;transition:width 1s cubic-bezier(.4,0,.2,1)}
+.model-bar-val{font-family:var(--mono);font-size:12px;width:50px;text-align:right;color:var(--text2)}
+.model-bar-row.best .model-bar-name{color:var(--green)}
+.model-bar-row.best .model-bar-val{color:var(--green)}
+
+/* POLL */
+.poll-opt{
+  display:flex;align-items:flex-start;gap:12px;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:14px 16px;cursor:pointer;transition:all .2s;margin-bottom:10px;
+  font-size:15px;line-height:1.4;
+}
+.poll-opt:hover{border-color:var(--border2);background:var(--card2)}
+.poll-opt.sel{border-color:var(--cyan);background:rgba(0,229,255,.06)}
+.poll-opt .opt-key{
+  font-family:var(--mono);font-size:11px;background:var(--border2);
+  width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:1px;transition:all .2s;
+}
+.poll-opt.sel .opt-key{background:var(--cyan);color:var(--void)}
+.poll-result-row{margin-bottom:12px}
+.poll-result-header{display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px}
+.poll-result-track{height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.poll-result-fill{height:100%;border-radius:4px;transition:width .7s cubic-bezier(.4,0,.2,1)}
+.poll-result-row.best-ans .poll-result-header span:first-child{color:var(--green)}
+
+/* FEAT IMP */
+.feat-row{margin-bottom:10px}
+.feat-header{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+.feat-name{color:var(--text2);font-family:var(--mono)}
+.feat-pct{color:var(--cyan);font-family:var(--mono);font-weight:500}
+.feat-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.feat-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--cyan),rgba(0,229,255,.4));transition:width .8s cubic-bezier(.4,0,.2,1)}
+
+/* CONCLUSION */
+.concl-item{
+  display:flex;gap:14px;align-items:flex-start;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;
+  margin-bottom:10px;font-size:14px;line-height:1.55;
+}
+.concl-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+
+/* NEXT STEP */
+.ns-item{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;
+}
+.ns-num{font-family:var(--mono);font-size:28px;font-weight:500;color:var(--border2);line-height:1;margin-bottom:8px}
+.ns-item h4{font-size:14px;font-weight:600;margin-bottom:4px}
+.ns-item p{font-size:13px;color:var(--text3);line-height:1.5}
+
+/* GLOW BADGE */
+.auc-badge{
+  display:inline-flex;flex-direction:column;align-items:center;
+  background:linear-gradient(135deg,rgba(0,229,255,.1),rgba(0,229,255,.03));
+  border:1px solid rgba(0,229,255,.35);border-radius:14px;padding:20px 28px;
+  position:relative;
+}
+.auc-badge::before{
+  content:'';position:absolute;inset:-1px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(0,229,255,.2),transparent);
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask-composite:exclude;padding:1px;
+}
+.auc-big{font-family:var(--mono);font-size:52px;font-weight:500;color:var(--cyan);line-height:1;text-shadow:0 0 30px rgba(0,229,255,.5)}
+.auc-lbl{font-size:12px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-top:4px}
+
+/* PARETO CARD */
+.pareto-highlight{
+  background:linear-gradient(135deg,rgba(255,179,71,.08),rgba(255,179,71,.02));
+  border:1px solid rgba(255,179,71,.25);border-radius:12px;
+  padding:20px;display:flex;align-items:center;gap:16px;
+}
+.pareto-highlight .p-num{font-family:var(--mono);font-size:36px;color:var(--amber)}
+.pareto-highlight .p-desc{font-size:14px;color:var(--text2);line-height:1.5}
+.pareto-highlight .p-desc strong{color:var(--text)}
+
+/* SEPARATOR */
+.sep{width:100%;height:1px;background:var(--border);margin:20px 0}
+
+/* VOTE BTN */
+.vote-btn-wrap{margin-top:8px}
+.reset-poll{
+  background:none;border:1px solid var(--border2);color:var(--text3);
+  padding:7px 18px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:12px;
+  transition:all .2s;margin-top:12px;
+}
+.reset-poll:hover{border-color:var(--red);color:var(--red)}
+
+/* INSTRUCTION BOX */
+.instr-box{
+  background:var(--card2);border:1px solid var(--border2);border-radius:8px;
+  padding:12px 16px;font-size:13px;color:var(--text3);line-height:1.6;
+  font-family:var(--mono);
+}
+.instr-box strong{color:var(--amber)}
+
+/* SLIDE 1 HERO */
+.hero-content{padding-top:32px}
+.hero-title-wrap{margin-bottom:28px;position:relative}
+.hero-pills{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:36px}
+.hero-bottom{display:flex;align-items:flex-start;gap:32px;flex-wrap:wrap}
+.hero-desc{max-width:480px;font-size:17px;color:var(--text2);line-height:1.65;font-weight:300}
+.hero-sub{font-family:var(--mono);font-size:12px;color:var(--text3);letter-spacing:.1em;margin-bottom:12px;text-transform:uppercase}
+.accent-line{width:48px;height:2px;background:linear-gradient(90deg,var(--cyan),transparent);margin-bottom:16px}
+
+/* DECORATIVE CORNER */
+.corner-deco{
+  position:absolute;top:24px;right:60px;
+  font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:.1em;
+  display:flex;flex-direction:column;align-items:flex-end;gap:4px;
+}
+.corner-deco .line{width:40px;height:1px;background:var(--border2);margin-left:auto}
+
+</style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+
+<div class="deck">
+
+  <!-- ═══ SLIDE 1: PORTADA ═══ -->
+  <div class="slide active" id="s1">
+    <div class="corner-deco">
+      <span>RETAIL ONLINE UK</span>
+      <span>ML · 2024</span>
+      <div class="line"></div>
+    </div>
+    <div class="slide-inner hero-content">
+      <div class="slide-label">Proyecto Machine Learning</div>
+      <div class="hero-title-wrap">
+        <div class="accent-line"></div>
+        <h1>Predicción de<br><em>Recompra</em><br>de Clientes</h1>
+      </div>
+      <div class="hero-pills">
+        <div class="pill"><strong>1,067,371</strong> transacciones</div>
+        <div class="pill"><strong>2009–2011</strong></div>
+        <div class="pill"><strong>43</strong> países</div>
+        <div class="pill"><strong>5,942</strong> clientes</div>
+        <div class="pill">Reino Unido 🇬🇧</div>
+      </div>
+      <div class="hero-bottom">
+        <div>
+          <div class="hero-sub">Objetivo</div>
+          <p class="hero-desc">Identificar qué clientes volverán a comprar para aplicar acciones de fidelización o retención personalizadas.</p>
+        </div>
+        <div class="auc-badge">
+          <div class="auc-big">0.81</div>
+          <div class="auc-lbl">Puntuación final del modelo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 2: DATASET ═══ -->
+  <div class="slide" id="s2">
+    <div class="slide-inner">
+      <div class="slide-label">Datos y Calidad</div>
+      <h2>El dataset y qué excluimos</h2>
+      <div class="g2" style="margin-bottom:20px">
+        <div>
+          <h3>Visión general</h3>
+          <div class="g2" style="gap:12px">
+            <div class="card cyan"><div class="stat-num" style="color:var(--cyan)">5,942</div><div class="stat-lbl">Clientes únicos</div></div>
+            <div class="card amber"><div class="stat-num" style="color:var(--amber)">£19,3M</div><div class="stat-lbl">Ingresos totales</div></div>
+            <div class="card"><div class="stat-num">53,628</div><div class="stat-lbl">Facturas</div></div>
+            <div class="card"><div class="stat-num">43</div><div class="stat-lbl">Países</div></div>
+          </div>
+        </div>
+        <div>
+          <h3>Exclusiones aplicadas</h3>
+          <div class="exc-row">
+            <span class="name">Cancelaciones (Facturas canceladas)</span>
+            <span class="val">−19,494</span>
+          </div>
+          <div class="exc-row">
+            <span class="name">Sin ID de cliente</span>
+            <span class="val">−243,007</span>
+          </div>
+          <div class="exc-row">
+            <span class="name">Cantidad o precio negativo</span>
+            <span class="val">−25,445</span>
+          </div>
+          <div class="exc-row" style="margin-top:4px;border-color:rgba(100,100,100,.2);background:var(--card2)">
+            <span style="color:var(--text3);font-size:13px">Original</span>
+            <span style="font-family:var(--mono);font-size:13px;color:var(--text3)">1,067,371</span>
+          </div>
+          <div class="exc-row total" style="margin-top:2px">
+            <span style="font-weight:600">Total de datos usados</span>
+            <span class="val">779,425 filas</span>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="padding:16px 20px;border-color:var(--border2)">
+        <p style="font-size:14px;color:var(--text2);line-height:1.6"><strong style="color:var(--text)">¿Por qué excluir sin ID de cliente?</strong>  Si no sabemos quién es el cliente, no podemos saber si esa persona volvió a comprar.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 3: EDA ═══ -->
+  <div class="slide" id="s3">
+    <div class="slide-inner">
+      <div class="slide-label">Análisis de los datos</div>
+      <h2>Lo que nos dicen los datos</h2>
+      <div class="g2" style="align-items:start;gap:20px">
+        <div>
+          <div class="chart-box" style="margin-bottom:16px">
+            <h3>Ingresos mensuales 2009–2011</h3>
+            <canvas id="chartMes" height="180"></canvas>
+          </div>
+          <div class="pareto-highlight">
+            <div class="p-num">23%</div>
+            <div class="p-desc"><strong>de clientes generan el 80% de las ventas</strong><br>Solo 1,353 de 5,942 clientes acumulan casi todas las ventas. Un grupo pequeño pero muy valioso.</div>
+          </div>
+        </div>
+        <div>
+          <div class="chart-box">
+            <h3>Top 6 países por ingresos</h3>
+            <canvas id="chartPaises" height="260"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 4: METODOLOGÍA ═══ -->
+  <div class="slide" id="s4">
+    <div class="slide-inner">
+      <div class="slide-label">Cómo lo hemos hecho</div>
+      <h2>Cómo construimos el modelo</h2>
+      <div class="g3" style="margin-bottom:22px">
+        <div class="rfm-card rfm-r">
+          <div class="big-letter">R</div>
+          <h4>Recency</h4>
+          <p>Cuántos días lleva el cliente sin comprar. Cuanto menos tiempo, más probable que vuelva.</p>
+        </div>
+        <div class="rfm-card rfm-f">
+          <div class="big-letter">F</div>
+          <h4>Frequency</h4>
+          <p>Cuántas veces ha comprado. Los clientes habituales tienen más probabilidad de repetir.</p>
+        </div>
+        <div class="rfm-card rfm-m">
+          <div class="big-letter">M</div>
+          <h4>Monetary</h4>
+          <p>Cuánto dinero ha gastado en total, junto con su compra media y variedad de productos.</p>
+        </div>
+      </div>
+      <h3>División de los datos en el tiempo</h3>
+      <div class="timeline">
+        <div class="tl-train">
+          <div class="tl-label" style="color:var(--cyan)">Datos de entrenamiento</div>
+          <div class="tl-val" style="color:var(--cyan)">5,279 clientes</div>
+          <div class="tl-sub">Dic 2009 → Sep 2011</div>
+          <div style="margin-top:10px;font-size:13px;color:var(--text3)">Con estos datos calculamos el perfil de compra de cada cliente.</div>
+        </div>
+        <div class="tl-arrow">→</div>
+        <div class="tl-test">
+          <div class="tl-label" style="color:var(--green)">Variable objetivo (últimos 3 meses)</div>
+          <div class="tl-val" style="color:var(--green)">43.5%</div>
+          <div class="tl-sub">recompraron tras el corte</div>
+          <div style="margin-top:10px;font-size:13px;color:var(--text3)">Comprobamos si cada cliente volvió a comprar después de esa fecha.</div>
+        </div>
+      </div>
+      <div style="margin-top:16px" class="card" style="padding:14px 18px">
+        <p style="font-size:13px;color:var(--text2)">También usamos el país, el gasto medio por compra, la cantidad media de artículos y la variedad de productos. En total: 5,279 clientes con 17 características cada uno.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 5: RESULTADOS ═══ -->
+  <div class="slide" id="s5">
+    <div class="slide-inner">
+      <div class="slide-label">Resultados del modelo</div>
+      <h2>Comparativa de modelos</h2>
+      <div class="g2" style="align-items:start;gap:20px">
+        <div>
+          <h3>Comparamos 8 algoritmos distintos</h3>
+          <div id="modelBars" style="margin-top:8px"></div>
+          <div class="card green" style="margin-top:14px;padding:14px 18px;display:flex;align-items:center;gap:14px">
+            <div>
+              <div style="font-size:11px;color:var(--text3);font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Mejor algoritmo · Afinado</div>
+              <div style="font-size:22px;font-family:var(--mono);color:var(--green)">Gradient Boosting</div>
+            </div>
+            <div style="margin-left:auto;text-align:right">
+              <div style="font-family:var(--mono);font-size:32px;color:var(--green)">0.8082</div>
+              <div style="font-size:11px;color:var(--text3)">Puntuación final tras ajuste</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="chart-box">
+            <h3>Curva de rendimiento — Gradient Boosting</h3>
+            <canvas id="chartROC" height="230"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 7: CONCLUSIONES ═══ -->
+  <div class="slide" id="s6">
+    <div class="slide-inner">
+      <div class="slide-label">Conclusiones y próximos pasos</div>
+      <h2>Lo aprendido y los próximos pasos</h2>
+      <div class="g2" style="align-items:start;gap:24px">
+        <div>
+          <h3>Conclusiones</h3>
+          <div class="concl-item"><span class="concl-icon">🎯</span><div><strong>Puntuación de 0.81 sobre 1</strong> — el modelo distingue correctamente qué clientes van a volver y cuáles no.</div></div>
+          <div class="concl-item"><span class="concl-icon">⏱️</span><div><strong>El tiempo sin comprar es lo más importante</strong> (57%) — cuántos días lleva el cliente sin comprar es el dato que más influye.</div></div>
+          <div class="concl-item"><span class="concl-icon">👑</span><div><strong>Pocos clientes, mucho valor</strong> — el 23% de los clientes genera el 80% de las ventas. El modelo nos ayuda a saber en quién centrarnos.</div></div>
+          <div class="concl-item"><span class="concl-icon">🏆</span><div><strong>Gradient Boosting</strong> superó a XGBoost, LightGBM y Regresión Logística en este dataset.</div></div>
+        </div>
+        <div>
+          <h3>Próximos pasos</h3>
+          <div class="g2" style="gap:12px">
+            <div class="ns-item">
+              <div class="ns-num">01</div>
+              <h4>Segmentación por valor</h4>
+              <p>Cruzar la probabilidad de recompra con cuánto gasta cada cliente para decidir dónde invertir más.</p>
+            </div>
+            <div class="ns-item">
+              <div class="ns-num">02</div>
+              <h4>Features temporales</h4>
+              <p>Incorporar patrones de época del año y si el cliente compra cada vez más o menos.</p>
+            </div>
+            <div class="ns-item">
+              <div class="ns-num">03</div>
+              <h4>Modelo por segmento</h4>
+              <p>Hay clientes que compran al por mayor y otros que compran para uso personal. Cada grupo se comporta diferente.</p>
+            </div>
+            <div class="ns-item">
+              <div class="ns-num">04</div>
+              <h4>Monitorización</h4>
+              <p>Actualizar el modelo cada mes con datos nuevos para que no se quede obsoleto.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- NAV -->
+<div class="nav-bar">
+  <button class="nav-btn" onclick="nav(-1)">← PREV</button>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <div class="nav-dots" id="dots"></div>
+    <span class="slide-counter" id="counter">01 / 07</span>
+  </div>
+  <button class="nav-btn" onclick="nav(1)">NEXT →</button>
+</div>
+
+<script>
+// ── STARFIELD ──────────────────────────────────────
+(function(){
+  const c=document.getElementById('starfield');
+  const ctx=c.getContext('2d');
+  let W,H,stars=[];
+  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;stars=[];for(let i=0;i<120;i++)stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.2+.2,a:Math.random(),da:Math.random()*.005+.001})}
+  function draw(){ctx.clearRect(0,0,W,H);stars.forEach(s=>{s.a+=s.da;if(s.a>1||s.a<0)s.da*=-1;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(140,180,255,${s.a*.6})`;ctx.fill()});requestAnimationFrame(draw)}
+  resize();window.addEventListener('resize',resize);draw();
+})();
+
+// ── SLIDES ─────────────────────────────────────────
+const TOTAL=6;
+let cur=0;
+const slides=document.querySelectorAll('.slide');
+const dotsEl=document.getElementById('dots');
+const counterEl=document.getElementById('counter');
+let chartsBuilt={};
+
+// build dots
+for(let i=0;i<TOTAL;i++){
+  const d=document.createElement('div');
+  d.className='nav-dot'+(i===0?' active':'');
+  d.onclick=()=>goTo(i);
+  dotsEl.appendChild(d);
+}
+
+function goTo(n){
+  if(n<0||n>=TOTAL||n===cur)return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add('exit');
+  setTimeout(()=>slides[cur].classList.remove('exit'),500);
+  dotsEl.children[cur].classList.remove('active');
+  cur=n;
+  slides[cur].classList.add('active');
+  dotsEl.children[cur].classList.add('active');
+  counterEl.textContent=String(cur+1).padStart(2,'0')+' / '+String(TOTAL).padStart(2,'0');
+  buildSlideCharts(cur);
+}
+function nav(d){goTo(cur+d)}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key==='ArrowDown')nav(1);
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp')nav(-1);
+});
+
+// ── CHART DATA ─────────────────────────────────────
+const MES_LABELS=['Dic-09','Ene-10','Feb-10','Mar-10','Abr-10','May-10','Jun-10','Jul-10','Ago-10','Sep-10','Oct-10','Nov-10','Dic-10','Ene-11','Feb-11','Mar-11','Abr-11','May-11','Jun-11','Jul-11','Ago-11','Sep-11','Oct-11','Nov-11','Dic-11'];
+const MES_VALS=[683504,555803,504559,696978,591982,597833,636371,589736,602225,829014,1033112,1166460,570423,568101,446085,594082,468374,677355,660046,598963,644051,950690,1035642,1156206,517208];
+const PAISES_LABELS=['United Kingdom','EIRE','Netherlands','Germany','France','Australia'];
+const PAISES_VALS=[14389235,616571,554038,425020,348769,169283];
+const MODELOS=[
+  {name:'Decision Tree',val:.6419,best:false},
+  {name:'KNN',val:.7545,best:false},
+  {name:'XGBoost',val:.7832,best:false},
+  {name:'Random Forest',val:.7865,best:false},
+  {name:'Ridge Classifier',val:.7981,best:false},
+  {name:'LightGBM',val:.8001,best:false},
+  {name:'Logistic Regr.',val:.8061,best:false},
+  {name:'Gradient Boost.',val:.8075,best:true},
+];
+const ROC_FPR=[0,0.0034,0.0117,0.0218,0.0352,0.0452,0.0586,0.0704,0.0821,0.0921,0.1156,0.1323,0.1508,0.1675,0.1876,0.2027,0.2178,0.2412,0.2546,0.268,0.2831,0.3065,0.34,0.3568,0.3685,0.3836,0.4104,0.4539,0.4791,0.4992,0.5343,0.5662,0.6399,0.7337,0.7822,0.8643,0.9598,1];
+const ROC_TPR=[0,0.0763,0.1917,0.2397,0.2919,0.3268,0.3791,0.4074,0.4336,0.4597,0.4902,0.512,0.5447,0.5752,0.6078,0.6405,0.6601,0.6863,0.7037,0.7255,0.7473,0.7778,0.7952,0.8126,0.8344,0.854,0.8693,0.8824,0.8976,0.9107,0.9259,0.9368,0.9477,0.9608,0.9717,0.9826,0.9913,1];
+const FEATS=[
+  {name:'Días sin comprar',pct:57},
+  {name:'Nº de compras',pct:18},
+  {name:'Gasto total',pct:14},
+  {name:'Variedad productos',pct:6},
+  {name:'Compra media',pct:2},
+  {name:'Cantidad media',pct:2},
+];
+
+const CHART_OPTS={responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}}};
+const TICK_STYLE={color:'#4d6480',font:{family:"'DM Mono', monospace",size:10}};
+const GRID_STYLE={color:'rgba(255,255,255,0.04)'};
+
+function buildSlideCharts(n){
+  if(chartsBuilt[n])return;
+  chartsBuilt[n]=true;
+
+  if(n===2){
+    new Chart(document.getElementById('chartMes'),{
+      type:'bar',
+      data:{labels:MES_LABELS,datasets:[{data:MES_VALS,
+        backgroundColor:MES_VALS.map(v=>v>1000000?'rgba(255,179,71,.85)':'rgba(0,229,255,.5)'),
+        borderRadius:3,borderSkipped:false}]},
+      options:{...CHART_OPTS,scales:{
+        x:{ticks:{...TICK_STYLE,maxRotation:50},grid:GRID_STYLE},
+        y:{ticks:{...TICK_STYLE,callback:v=>'£'+(v/1000).toFixed(0)+'k'},grid:GRID_STYLE}
+      }}
+    });
+    new Chart(document.getElementById('chartPaises'),{
+      type:'bar',
+      data:{labels:PAISES_LABELS,datasets:[{data:PAISES_VALS,
+        backgroundColor:['rgba(0,229,255,.8)','rgba(255,179,71,.7)','rgba(0,255,157,.7)','rgba(255,77,109,.7)','rgba(150,150,255,.7)','rgba(255,200,100,.7)'],
+        borderRadius:4,borderSkipped:false}]},
+      options:{...CHART_OPTS,indexAxis:'y',scales:{
+        x:{ticks:{...TICK_STYLE,callback:v=>'£'+(v/1e6).toFixed(1)+'M'},grid:GRID_STYLE},
+        y:{ticks:{...TICK_STYLE,font:{...TICK_STYLE.font,size:12}},grid:{display:false}}
+      }}
+    });
+  }
+
+  if(n===4){
+    // Model bars DOM
+    const c=document.getElementById('modelBars');
+    c.innerHTML='';
+    MODELOS.forEach((m,i)=>{
+      const pct=(m.val*100).toFixed(0);
+      const row=document.createElement('div');
+      row.className='model-bar-row'+(m.best?' best':'');
+      row.innerHTML=`<span class="model-bar-name">${m.name}</span>
+        <div class="model-bar-track"><div class="model-bar-fill" id="mbf${i}" style="width:0%;background:${m.best?'var(--green)':'rgba(0,229,255,.5)'}"></div></div>
+        <span class="model-bar-val">${m.val}</span>`;
+      c.appendChild(row);
+      setTimeout(()=>{document.getElementById('mbf'+i).style.width=pct+'%'},100+i*80);
+    });
+    // ROC
+    new Chart(document.getElementById('chartROC'),{
+      type:'line',
+      data:{labels:ROC_FPR,datasets:[
+        {data:ROC_TPR,borderColor:'rgba(0,229,255,.9)',borderWidth:2,pointRadius:0,fill:true,backgroundColor:'rgba(0,229,255,.06)',tension:.4,label:'Gradient Boosting (punt.=0.81)'},
+        {data:ROC_FPR,borderColor:'rgba(255,77,109,.4)',borderWidth:1,pointRadius:0,borderDash:[4,4],label:'Random'}
+      ]},
+      options:{responsive:true,maintainAspectRatio:true,
+        plugins:{legend:{display:true,labels:{color:'#4d6480',font:{family:"'DM Mono'",size:10}}}},
+        scales:{
+          x:{ticks:{...TICK_STYLE,maxTicksLimit:5,callback:(_,i)=>i%8===0?ROC_FPR[i].toFixed(1):''},grid:GRID_STYLE,title:{display:true,text:'Falsos positivos',color:'#4d6480',font:{size:10}}},
+          y:{ticks:TICK_STYLE,grid:GRID_STYLE,title:{display:true,text:'Verdaderos positivos',color:'#4d6480',font:{size:10}}}
+        }
+      }
+    });
+  }
+
+  if(n===5){
+    buildFeatBars();
+  }
+}
+
+function buildFeatBars(){
+  const c=document.getElementById('featBars');
+  c.innerHTML='';
+  const colors=['#00e5ff','#ffb347','#00ff9d','#ff4d6d','#a78bfa','#60a5fa'];
+  FEATS.forEach((f,i)=>{
+    c.innerHTML+=`<div class="feat-row">
+      <div class="feat-header"><span class="feat-name">${f.name}</span><span class="feat-pct">${f.pct}%</span></div>
+      <div class="feat-track"><div class="feat-fill" id="ff${i}" style="width:0%;background:linear-gradient(90deg,${colors[i]},${colors[i]}66)"></div></div>
+    </div>`;
+  });
+  setTimeout(()=>{FEATS.forEach((f,i)=>document.getElementById('ff'+i).style.width=f.pct+'%')},100);
+}
+
+// init
+buildSlideCharts(0);
+</script>
+</body>
+</html>
